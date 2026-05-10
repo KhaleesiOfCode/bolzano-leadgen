@@ -124,3 +124,75 @@ def search_business_website(name: str, city: str = "Bolzano", category: str | No
         "confidence": 0.0,
         "status": "not_found",
     }
+
+
+DIGITAL_KEYWORDS = [
+    "digital marketing agency",
+    "web design agency",
+    "web development",
+    "marketing agency",
+    "advertising agency",
+    "social media agency",
+    "seo agency",
+    "software development",
+    "it consulting",
+    "graphic design studio",
+    "comunicazione marketing",
+    "agenzia pubblicitaria",
+    "agenzia marketing",
+    "agenzia web",
+    "digital agency",
+    "consulenza marketing",
+]
+
+
+def search_digital_agencies(city: str = "Bolzano") -> list[dict]:
+    api_key = _get_api_key()
+    if not api_key:
+        return []
+
+    seen_place_ids = set()
+    results = []
+
+    for keyword in DIGITAL_KEYWORDS:
+        query = f"{keyword} {city} Italy"
+        places = _text_search(query)
+        for place in places:
+            place_id = place.get("place_id")
+            if not place_id or place_id in seen_place_ids:
+                continue
+            seen_place_ids.add(place_id)
+
+            details = _get_place_details(place_id)
+            if not details:
+                continue
+
+            name = details.get("name", "")
+            website = details.get("website")
+            phone = details.get("formatted_phone_number")
+            address = details.get("formatted_address")
+
+            lead = {
+                "source": "google_places_digital",
+                "name": name,
+                "website": website,
+                "phone": phone,
+                "address": address,
+                "city": city,
+                "business_group": "digital_marketing",
+                "business_subgroup": "digital_agency",
+                "category": "digital_agency",
+                "classification_confidence": 100,
+                "search_area": city,
+                "province": "South Tyrol",
+                "region": "Trentino-Alto Adige/Südtirol",
+                "country": "Italy",
+                "has_website": website is not None,
+                "has_email": False,
+                "lead_status": "new",
+                "website_discovery_status": "not_checked",
+                "website_source": None,
+            }
+            results.append(lead)
+
+    return results

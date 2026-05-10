@@ -3,17 +3,25 @@
 import { Suspense, useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import type { Lead } from "@/lib/api";
-import { getLeads } from "@/lib/api";
+import type { Lead, Stats } from "@/lib/api";
+import { getLeads, getStats } from "@/lib/api";
 
-const BUSINESS_GROUPS = ["food", "healthcare", "beauty", "services"];
-const CITIES = ["Bolzano", "Bolzano / Bozen"];
+const BUSINESS_GROUPS = ["food", "healthcare", "beauty", "services", "digital_marketing"];
+
+const GROUP_LABELS: Record<string, string> = {
+  food: "Food & Dining",
+  healthcare: "Healthcare",
+  beauty: "Beauty & Personal Care",
+  services: "Other Services",
+  digital_marketing: "Digital Marketing",
+};
 
 const GROUP_COLORS: Record<string, string> = {
   food: "bg-orange-100 text-orange-800",
   healthcare: "bg-red-100 text-red-800",
   beauty: "bg-pink-100 text-pink-800",
   services: "bg-blue-100 text-blue-800",
+  digital_marketing: "bg-purple-100 text-purple-800",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -39,6 +47,8 @@ function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(true);
 
   const businessGroup = searchParams.get("business_group") || "";
   const businessSubgroup = searchParams.get("business_subgroup") || "";
@@ -73,6 +83,12 @@ function LeadsPage() {
 
   useEffect(() => { loadLeads(); }, [loadLeads]);
 
+  useEffect(() => {
+    getStats().then(setStats).catch(() => {});
+  }, []);
+
+  const activeFilters = [businessGroup, businessSubgroup, leadStatus, hasWebsite, city, websiteSource].filter(Boolean).length;
+
   function filterUrl(overrides: Record<string, string | undefined>) {
     const p = new URLSearchParams();
     const groups = ["business_group", "business_subgroup", "lead_status", "has_website", "city", "website_source"];
@@ -99,6 +115,8 @@ function LeadsPage() {
     router.push(`/leads?${p.toString()}`);
   }
 
+  const cities = stats?.by_city ? Object.keys(stats.by_city).sort() : ["Bolzano"];
+
   return (
     <div className="max-w-7xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
@@ -107,6 +125,16 @@ function LeadsPage() {
           <h1 className="text-2xl font-bold mt-1">Leads</h1>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`px-3 py-1.5 text-sm border rounded-lg transition-colors ${
+              activeFilters > 0
+                ? "bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                : "bg-white border-gray-300 hover:bg-gray-50"
+            }`}
+          >
+            Filters {activeFilters > 0 ? `(${activeFilters})` : ""}
+          </button>
           <a
             href="http://127.0.0.1:8000/leads/export/csv"
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -117,50 +145,68 @@ function LeadsPage() {
             href="/leads"
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
-            Clear Filters
+            Clear
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4 items-center">
-        <span className="text-sm text-gray-500">Group:</span>
-        <FilterChip active={!businessGroup} href={filterUrl({ business_group: "" })} label="All" />
-        {BUSINESS_GROUPS.map((g) => (
-          <FilterChip key={g} active={businessGroup === g} href={filterUrl({ business_group: g })} label={g} />
-        ))}
+      {filtersOpen && (
+        <div className="mb-6 bg-white border border-gray-200 rounded-xl shadow-sm p-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <FilterSection label="Business Group">
+              <FilterChip active={!businessGroup} href={filterUrl({ business_group: "" })} label="All" />
+              {BUSINESS_GROUPS.map((g) => (
+                <FilterChip key={g} active={businessGroup === g} href={filterUrl({ business_group: g })} label={GROUP_LABELS[g] || g} />
+              ))}
+            </FilterSection>
 
-        <span className="text-sm text-gray-500 ml-2">Subgroup:</span>
-        <FilterChip active={!businessSubgroup} href={filterUrl({ business_subgroup: "" })} label="All" />
-        <FilterChip active={businessSubgroup === "bakery"} href={filterUrl({ business_subgroup: "bakery" })} label="Bakery" />
-        <FilterChip active={businessSubgroup === "home_baker_candidate"} href={filterUrl({ business_subgroup: "home_baker_candidate" })} label="Home Baker" />
-        <FilterChip active={businessSubgroup === "nail_salon"} href={filterUrl({ business_subgroup: "nail_salon" })} label="Nail Salon" />
+            <FilterSection label="Subgroup">
+              <FilterChip active={!businessSubgroup} href={filterUrl({ business_subgroup: "" })} label="All" />
+              <FilterChip active={businessSubgroup === "restaurant"} href={filterUrl({ business_subgroup: "restaurant" })} label="Restaurant" />
+              <FilterChip active={businessSubgroup === "cafe"} href={filterUrl({ business_subgroup: "cafe" })} label="Cafe" />
+              <FilterChip active={businessSubgroup === "bakery"} href={filterUrl({ business_subgroup: "bakery" })} label="Bakery" />
+              <FilterChip active={businessSubgroup === "bar"} href={filterUrl({ business_subgroup: "bar" })} label="Bar" />
+              <FilterChip active={businessSubgroup === "home_baker_candidate"} href={filterUrl({ business_subgroup: "home_baker_candidate" })} label="Home Baker" />
+              <FilterChip active={businessSubgroup === "nail_salon"} href={filterUrl({ business_subgroup: "nail_salon" })} label="Nail Salon" />
+              <FilterChip active={businessSubgroup === "hair_salon"} href={filterUrl({ business_subgroup: "hair_salon" })} label="Hair Salon" />
+              <FilterChip active={businessSubgroup === "beauty_salon"} href={filterUrl({ business_subgroup: "beauty_salon" })} label="Beauty Salon" />
+              <FilterChip active={businessSubgroup === "digital_agency"} href={filterUrl({ business_subgroup: "digital_agency" })} label="Digital Agency" />
+              <FilterChip active={businessSubgroup === "marketing_agency"} href={filterUrl({ business_subgroup: "marketing_agency" })} label="Marketing Agency" />
+            </FilterSection>
 
-        <span className="text-sm text-gray-500 ml-2">Status:</span>
-        <FilterChip active={!leadStatus} href={filterUrl({ lead_status: "" })} label="All" />
-        <FilterChip active={leadStatus === "new"} href={filterUrl({ lead_status: "new" })} label="New" />
-        <FilterChip active={leadStatus === "needs_manual_verification"} href={filterUrl({ lead_status: "needs_manual_verification" })} label="Needs Verification" />
+            <FilterSection label="Lead Status">
+              <FilterChip active={!leadStatus} href={filterUrl({ lead_status: "" })} label="All" />
+              <FilterChip active={leadStatus === "new"} href={filterUrl({ lead_status: "new" })} label="New" />
+              <FilterChip active={leadStatus === "needs_manual_verification"} href={filterUrl({ lead_status: "needs_manual_verification" })} label="Needs Verification" />
+              <FilterChip active={leadStatus === "contacted"} href={filterUrl({ lead_status: "contacted" })} label="Contacted" />
+              <FilterChip active={leadStatus === "responded"} href={filterUrl({ lead_status: "responded" })} label="Responded" />
+              <FilterChip active={leadStatus === "converted"} href={filterUrl({ lead_status: "converted" })} label="Converted" />
+              <FilterChip active={leadStatus === "not_interested"} href={filterUrl({ lead_status: "not_interested" })} label="Not Interested" />
+            </FilterSection>
 
-        <span className="text-sm text-gray-500 ml-2">Website:</span>
-        <FilterChip active={!hasWebsite} href={filterUrl({ has_website: "" })} label="All" />
-        <FilterChip active={hasWebsite === "true"} href={filterUrl({ has_website: "true" })} label="Has Website" />
-        <FilterChip active={hasWebsite === "false"} href={filterUrl({ has_website: "false" })} label="No Website" />
+            <FilterSection label="Website">
+              <FilterChip active={!hasWebsite} href={filterUrl({ has_website: "" })} label="All" />
+              <FilterChip active={hasWebsite === "true"} href={filterUrl({ has_website: "true" })} label="Has Website" />
+              <FilterChip active={hasWebsite === "false"} href={filterUrl({ has_website: "false" })} label="No Website" />
+            </FilterSection>
 
-        <span className="text-sm text-gray-500 ml-2">City:</span>
-        <FilterChip active={!city} href={filterUrl({ city: "" })} label="All" />
-        {CITIES.map((c) => (
-          <FilterChip key={c} active={city === c} href={filterUrl({ city: c })} label={c} />
-        ))}
+            <FilterSection label="Website Source">
+              <FilterChip active={!websiteSource} href={filterUrl({ website_source: "" })} label="All" />
+              <FilterChip active={websiteSource === "official"} href={filterUrl({ website_source: "official" })} label="Official" />
+              <FilterChip active={websiteSource === "social"} href={filterUrl({ website_source: "social" })} label="Social" />
+              <FilterChip active={websiteSource === "booking_platform"} href={filterUrl({ website_source: "booking_platform" })} label="Booking" />
+              <FilterChip active={websiteSource === "directory"} href={filterUrl({ website_source: "directory" })} label="Directory" />
+              <FilterChip active={websiteSource === "google_places"} href={filterUrl({ website_source: "google_places" })} label="Google Places" />
+              <FilterChip active={websiteSource === "osm"} href={filterUrl({ website_source: "osm" })} label="OSM" />
+            </FilterSection>
 
-        <span className="text-sm text-gray-500 ml-2">Source:</span>
-        <FilterChip active={!websiteSource} href={filterUrl({ website_source: "" })} label="All" />
-        <FilterChip active={websiteSource === "official"} href={filterUrl({ website_source: "official" })} label="Official" />
-        <FilterChip active={websiteSource === "social"} href={filterUrl({ website_source: "social" })} label="Social" />
-        <FilterChip active={websiteSource === "booking_platform"} href={filterUrl({ website_source: "booking_platform" })} label="Booking" />
-      </div>
-
-      {city && (
-        <div className="mb-4 text-sm text-gray-600">
-          Filtered by city: <span className="font-medium">{city}</span> <Link href={filterUrl({ city: "" })} className="text-blue-600 hover:underline">(clear)</Link>
+            <FilterSection label="City">
+              <FilterChip active={!city} href={filterUrl({ city: "" })} label="All" />
+              {cities.slice(0, 12).map((c) => (
+                <FilterChip key={c} active={city === c} href={filterUrl({ city: c })} label={c} />
+              ))}
+            </FilterSection>
+          </div>
         </div>
       )}
 
@@ -266,10 +312,21 @@ function LeadsPage() {
 
 function FilterChip({ active, href, label }: { active: boolean; href: string; label: string }) {
   return active ? (
-    <span className="px-3 py-1 text-sm bg-blue-600 text-white rounded-full font-medium">{label}</span>
+    <span className="inline-block px-2.5 py-1 text-xs bg-blue-600 text-white rounded-full font-medium">{label}</span>
   ) : (
-    <Link href={href} className="px-3 py-1 text-sm bg-white border border-gray-300 rounded-full hover:bg-gray-50 transition-colors">
+    <Link href={href} className="inline-block px-2.5 py-1 text-xs bg-white border border-gray-300 rounded-full hover:bg-gray-100 hover:border-gray-400 transition-colors">
       {label}
     </Link>
+  );
+}
+
+function FilterSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {children}
+      </div>
+    </div>
   );
 }

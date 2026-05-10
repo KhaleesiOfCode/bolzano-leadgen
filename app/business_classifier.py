@@ -83,12 +83,27 @@ SERVICES_KEYS = {
     ("leisure", "sports_centre"): "sports_centre",
 }
 
+DIGITAL_MARKETING_KEYS = {
+    ("office", "advertising_agency"): "advertising_agency",
+    ("office", "marketing"): "marketing_agency",
+    ("office", "consulting"): "consulting",
+    ("office", "it"): "digital_agency",
+    ("office", "company"): "digital_agency",
+    ("craft", "it_consultant"): "it_consulting",
+    ("craft", "software_developer"): "software_development",
+    ("craft", "web_design"): "web_design",
+    ("craft", "graphic_designer"): "graphic_design",
+    ("craft", "marketing"): "marketing",
+    ("craft", "public_relations"): "public_relations",
+}
+
 ALL_KEYS: list[tuple[tuple[str, str], str, str]] = []
 for group_name, mapping in [
     ("food", FOOD_KEYS),
     ("beauty", BEAUTY_KEYS),
     ("healthcare", HEALTHCARE_KEYS),
     ("services", SERVICES_KEYS),
+    ("digital_marketing", DIGITAL_MARKETING_KEYS),
 ]:
     for (k, v), subgroup in mapping.items():
         ALL_KEYS.append(((k, v), group_name, subgroup))

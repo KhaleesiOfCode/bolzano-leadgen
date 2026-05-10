@@ -195,6 +195,10 @@ export function scrapeCity(cityName: string): Promise<ScrapeResult> {
   return fetcher(`/scrape/osm/city/${encodeURIComponent(cityName)}`, { method: "POST" });
 }
 
+export function scrapeDigitalAgencies(cityName: string): Promise<ScrapeResult> {
+  return fetcher(`/scrape/digital-agencies/${encodeURIComponent(cityName)}`, { method: "POST" });
+}
+
 export function enrichLead(id: number): Promise<Lead> {
   return fetcher(`/leads/${id}/enrich`, { method: "POST" });
 }

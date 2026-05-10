@@ -11,8 +11,32 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "BolzanoLeadGen/1.0 (educational project; contact@example.com)"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
-BOLZANO_BBOX = "46.43,11.28,46.54,11.40"
 WEBSITE_VERIFY_TIMEOUT = 10
+
+SOUTH_TYROL_BBOX = "46.20,10.40,47.10,12.50"
+
+CITY_BBOXES: dict[str, str] = {
+    "bolzano": "46.43,11.28,46.54,11.40",
+    "merano": "46.63,11.12,46.69,11.20",
+    "brixen": "46.70,11.62,46.73,11.68",
+    "bruneck": "46.78,11.92,46.82,11.98",
+    "sterzing": "46.88,11.42,46.91,11.47",
+    "schlanders": "46.62,10.75,46.63,10.78",
+    "glurns": "46.67,10.55,46.68,10.56",
+    "mals": "46.69,10.53,46.70,10.55",
+    "lana": "46.60,11.14,46.62,11.18",
+    "naturns": "46.64,10.99,46.66,11.01",
+    "kaltern": "46.41,11.23,46.43,11.27",
+    "neumarkt": "46.36,11.26,46.38,11.28",
+    "leifers": "46.43,11.31,46.46,11.34",
+    "auer": "46.34,11.27,46.36,11.29",
+    "salurn": "46.25,11.21,46.27,11.23",
+    "tramin": "46.37,11.23,46.38,11.25",
+    "algund": "46.67,11.12,46.68,11.14",
+    "marling": "46.64,11.13,46.65,11.15",
+    "tirol": "46.68,11.14,46.69,11.16",
+    "schenna": "46.68,11.16,46.69,11.18",
+}
 
 EXPANDED_TAGS: list[tuple[str, str, str, str]] = []
 
@@ -97,7 +121,21 @@ services_tags = [
     ("leisure", "sports_centre", "services", "sports_centre"),
 ]
 
-ALL_TAGS = food_tags + beauty_tags + healthcare_tags + services_tags
+digital_marketing_tags = [
+    ("office", "advertising_agency", "digital_marketing", "advertising_agency"),
+    ("office", "marketing", "digital_marketing", "marketing_agency"),
+    ("office", "consulting", "digital_marketing", "consulting"),
+    ("office", "it", "digital_marketing", "digital_agency"),
+    ("office", "company", "digital_marketing", "digital_agency"),
+    ("craft", "it_consultant", "digital_marketing", "it_consulting"),
+    ("craft", "software_developer", "digital_marketing", "software_development"),
+    ("craft", "web_design", "digital_marketing", "web_design"),
+    ("craft", "graphic_designer", "digital_marketing", "graphic_design"),
+    ("craft", "marketing", "digital_marketing", "marketing"),
+    ("craft", "public_relations", "digital_marketing", "public_relations"),
+]
+
+ALL_TAGS = food_tags + beauty_tags + healthcare_tags + services_tags + digital_marketing_tags
 
 
 def _build_query(bbox: str) -> str:
@@ -228,9 +266,26 @@ def _element_to_lead(element: dict, search_area: str = "Bolzano") -> dict[str, A
 
 
 def scrape_bolzano() -> list[dict[str, Any]]:
-    query = _build_query(BOLZANO_BBOX)
+    return scrape_area(BOLZANO_BBOX, search_area="Bolzano")
 
-    logger.info("Querying Overpass API for Bolzano venues (food, healthcare, beauty, services) ...")
+
+def scrape_south_tyrol() -> list[dict[str, Any]]:
+    return scrape_area(SOUTH_TYROL_BBOX, search_area="South Tyrol")
+
+
+def scrape_city(city_name: str) -> list[dict[str, Any]]:
+    key = city_name.strip().lower()
+    bbox = CITY_BBOXES.get(key)
+    if not bbox:
+        valid = ", ".join(sorted(CITY_BBOXES.keys()))
+        raise ValueError(f"Unknown city '{city_name}'. Valid cities: {valid}")
+    return scrape_area(bbox, search_area=city_name.title())
+
+
+def scrape_area(bbox: str, search_area: str = "Bolzano") -> list[dict[str, Any]]:
+    query = _build_query(bbox)
+
+    logger.info("Querying Overpass API for %s (bbox: %s) ...", search_area, bbox)
 
     try:
         resp = requests.post(
@@ -251,7 +306,7 @@ def scrape_bolzano() -> list[dict[str, Any]]:
     leads = []
     for element in elements:
         if element.get("tags", {}).get("name"):
-            leads.append(_element_to_lead(element, search_area="Bolzano"))
+            leads.append(_element_to_lead(element, search_area=search_area))
 
     time.sleep(1)
 

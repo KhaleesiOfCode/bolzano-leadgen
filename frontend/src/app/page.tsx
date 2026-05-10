@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Stats } from "@/lib/api";
-import { getStats, scrapeBolzano } from "@/lib/api";
+import { getStats, scrapeBolzano, scrapeSouthTyrol, scrapeCity, scrapeDigitalAgencies } from "@/lib/api";
 
 const GROUP_LABELS: Record<string, string> = {
   food: "Food & Dining",
   healthcare: "Healthcare",
   beauty: "Beauty & Personal Care",
   services: "Other Services",
+  digital_marketing: "Digital Marketing",
 };
 
 const GROUP_COLORS: Record<string, string> = {
@@ -17,7 +18,13 @@ const GROUP_COLORS: Record<string, string> = {
   healthcare: "bg-red-500",
   beauty: "bg-pink-500",
   services: "bg-blue-500",
+  digital_marketing: "bg-purple-500",
 };
+
+const SOUTH_TYROL_CITIES = [
+  "bolzano", "merano", "brixen", "bruneck", "sterzing",
+  "schlanders", "lana", "naturns", "kaltern", "neumarkt",
+];
 
 export default function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -25,6 +32,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<string | null>(null);
+  const [scrapingCity, setScrapingCity] = useState<string | null>(null);
 
   async function loadStats() {
     setError(null);
@@ -39,17 +47,57 @@ export default function Dashboard() {
 
   useEffect(() => { loadStats(); }, []);
 
-  async function handleScrape() {
-    setScraping(true);
-    setScrapeResult(null);
-    try {
-      const r = await scrapeBolzano();
-      setScrapeResult(`Found ${r.leads_found} leads (${r.created} new, ${r.updated} updated)`);
-      await loadStats();
-    } catch (e: any) {
-      setScrapeResult(`Error: ${e.message}`);
-    } finally {
-      setScraping(false);
+  async function handleScrape(type: string, cityName?: string) {
+    if (type === "south-tyrol") {
+      setScraping(true);
+      setScrapeResult(null);
+      try {
+        const r = await scrapeSouthTyrol();
+        setScrapeResult(`South Tyrol: ${r.leads_found} leads (${r.created} new, ${r.updated} updated)`);
+        await loadStats();
+      } catch (e: any) {
+        setScrapeResult(`Error: ${e.message}`);
+      } finally {
+        setScraping(false);
+      }
+    } else if (type === "city" && cityName) {
+      setScrapingCity(cityName);
+      setScrapeResult(null);
+      try {
+        const r = await scrapeCity(cityName);
+        const label = cityName.charAt(0).toUpperCase() + cityName.slice(1);
+        setScrapeResult(`${label}: ${r.leads_found} leads (${r.created} new, ${r.updated} updated)`);
+        await loadStats();
+      } catch (e: any) {
+        setScrapeResult(`Error scraping ${cityName}: ${e.message}`);
+      } finally {
+        setScrapingCity(null);
+      }
+    } else if (type === "digital" && cityName) {
+      setScrapingCity(cityName);
+      setScrapeResult(null);
+      try {
+        const r = await scrapeDigitalAgencies(cityName);
+        const label = cityName.charAt(0).toUpperCase() + cityName.slice(1);
+        setScrapeResult(`${label} digital agencies: ${r.leads_found} found (${r.created} new)`);
+        await loadStats();
+      } catch (e: any) {
+        setScrapeResult(`Error scraping digital agencies in ${cityName}: ${e.message}`);
+      } finally {
+        setScrapingCity(null);
+      }
+    } else {
+      setScraping(true);
+      setScrapeResult(null);
+      try {
+        const r = await scrapeBolzano();
+        setScrapeResult(`Bolzano: ${r.leads_found} leads (${r.created} new, ${r.updated} updated)`);
+        await loadStats();
+      } catch (e: any) {
+        setScrapeResult(`Error: ${e.message}`);
+      } finally {
+        setScraping(false);
+      }
     }
   }
 
@@ -83,7 +131,7 @@ export default function Dashboard() {
       <header className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold">Bolzano LeadGen</h1>
-          <p className="text-gray-500 mt-1">Lead generation dashboard for Bolzano businesses</p>
+          <p className="text-gray-500 mt-1">Lead generation dashboard for South Tyrol businesses</p>
         </div>
         <div className="flex gap-3">
           <Link
@@ -93,11 +141,18 @@ export default function Dashboard() {
             View Leads
           </Link>
           <button
-            onClick={handleScrape}
+            onClick={() => handleScrape("bolzano")}
             disabled={scraping}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {scraping ? "Scraping..." : "Scrape OSM"}
+            {scraping ? "Scraping..." : "Bolzano"}
+          </button>
+          <button
+            onClick={() => handleScrape("south-tyrol")}
+            disabled={scraping}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          >
+            {scraping ? "Scraping..." : "South Tyrol"}
           </button>
         </div>
       </header>
@@ -124,6 +179,42 @@ export default function Dashboard() {
             <StatCard label="Booking Platform" value={stats.booking_platform_only} />
             <StatCard label="No Website (OSM)" value={stats.no_website_osm} />
           </div>
+
+          <details className="mb-8 bg-gray-50 rounded-xl border border-gray-200 p-4">
+            <summary className="text-sm font-semibold text-gray-600 cursor-pointer select-none">
+              Scrape individual cities
+            </summary>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-3">
+              {SOUTH_TYROL_CITIES.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => handleScrape("city", city)}
+                  disabled={scrapingCity === city}
+                  className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-100 disabled:opacity-50 capitalize transition-colors"
+                >
+                  {scrapingCity === city ? "..." : city}
+                </button>
+              ))}
+            </div>
+          </details>
+
+          <details className="mb-8 bg-purple-50 rounded-xl border border-purple-200 p-4">
+            <summary className="text-sm font-semibold text-purple-700 cursor-pointer select-none">
+              Scrape digital agencies (Google Places)
+            </summary>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-3">
+              {SOUTH_TYROL_CITIES.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => handleScrape("digital", city)}
+                  disabled={scrapingCity === city}
+                  className="px-3 py-1.5 bg-white border border-purple-300 rounded-lg text-sm hover:bg-purple-100 disabled:opacity-50 capitalize transition-colors"
+                >
+                  {scrapingCity === city ? "..." : city}
+                </button>
+              ))}
+            </div>
+          </details>
 
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -171,6 +262,12 @@ export default function Dashboard() {
                 </Link>
                 <Link href="/leads?lead_status=needs_manual_verification" className="block px-3 py-2 bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100">
                   Needs manual verification
+                </Link>
+                <Link href="/leads?business_group=digital_marketing" className="block px-3 py-2 bg-purple-50 text-purple-800 rounded-lg hover:bg-purple-100">
+                  Digital marketing agencies
+                </Link>
+                <Link href="/leads?business_group=digital_marketing&has_website=false" className="block px-3 py-2 bg-purple-50 text-purple-800 rounded-lg hover:bg-purple-100">
+                  Digital agencies without website
                 </Link>
               </div>
             </div>

@@ -32,6 +32,12 @@ def calculate_score(lead_data: dict[str, Any]) -> int:
     if group == "food":
         score += 2
 
+    if group == "digital_marketing":
+        score += 3
+
+    if subgroup in ("digital_agency", "marketing_agency", "advertising_agency", "it_consulting", "web_design"):
+        score += 3
+
     if subgroup in ("bakery", "pastry_shop", "home_baker_candidate", "restaurant", "cafe"):
         score += 2
 

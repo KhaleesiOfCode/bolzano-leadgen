@@ -16,11 +16,11 @@ from app.schemas import (
     LeadNotesUpdate,
     StatsResponse,
 )
-from app.osm_scraper import scrape_bolzano
+from app.osm_scraper import scrape_bolzano, scrape_south_tyrol, scrape_city
 from app.lead_scoring import calculate_score
-from app.email_extractor import enrich_lead_with_email
+from app.email_extractor import enrich_lead_with_email, hunter_email_search
 from app.website_classifier import classify_url
-from app.google_places import search_business_website
+from app.google_places import search_business_website, search_digital_agencies
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -34,7 +34,9 @@ def root():
         "frontend": "http://localhost:3000",
         "endpoints": {
             "health": "GET /health",
-            "scrape": "POST /scrape/osm/bolzano",
+            "scrape_bolzano": "POST /scrape/osm/bolzano",
+            "scrape_south_tyrol": "POST /scrape/osm/south-tyrol",
+            "scrape_city": "POST /scrape/osm/city/{city_name}",
             "leads": "GET /leads",
             "stats": "GET /stats",
             "csv_export": "GET /leads/export/csv",
@@ -75,6 +77,88 @@ def scrape_osm_bolzano(db: Session = Depends(get_db)):
         "leads_found": len(raw_leads),
         "created": created,
         "updated": updated,
+    }
+
+
+@router.post("/scrape/osm/south-tyrol")
+def scrape_osm_south_tyrol(db: Session = Depends(get_db)):
+    raw_leads = scrape_south_tyrol()
+    created = 0
+    updated = 0
+
+    for raw in raw_leads:
+        raw["lead_score"] = calculate_score(raw)
+        existing = db.query(Lead).filter(
+            Lead.osm_type == raw["osm_type"],
+            Lead.osm_id == raw["osm_id"],
+        ).first()
+        if existing:
+            for key, value in raw.items():
+                setattr(existing, key, value)
+            updated += 1
+        else:
+            db.add(Lead(**raw))
+            created += 1
+    db.commit()
+    return {
+        "leads_found": len(raw_leads),
+        "created": created,
+        "updated": updated,
+    }
+
+
+@router.post("/scrape/osm/city/{city_name}")
+def scrape_osm_city(city_name: str, db: Session = Depends(get_db)):
+    try:
+        raw_leads = scrape_city(city_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    created = 0
+    updated = 0
+    for raw in raw_leads:
+        raw["lead_score"] = calculate_score(raw)
+        existing = db.query(Lead).filter(
+            Lead.osm_type == raw["osm_type"],
+            Lead.osm_id == raw["osm_id"],
+        ).first()
+        if existing:
+            for key, value in raw.items():
+                setattr(existing, key, value)
+            updated += 1
+        else:
+            db.add(Lead(**raw))
+            created += 1
+    db.commit()
+    return {
+        "leads_found": len(raw_leads),
+        "created": created,
+        "updated": updated,
+    }
+
+
+@router.post("/scrape/digital-agencies/{city_name}")
+def scrape_digital_agencies(city_name: str, db: Session = Depends(get_db)):
+    results = search_digital_agencies(city_name)
+    created = 0
+    skipped = 0
+    for raw in results:
+        raw["lead_score"] = calculate_score(raw)
+        existing = db.query(Lead).filter(
+            Lead.name == raw["name"],
+            Lead.source == "google_places_digital",
+            Lead.city.ilike(f"%{city_name}%"),
+        ).first()
+        if existing:
+            skipped += 1
+        else:
+            db.add(Lead(**raw))
+            created += 1
+    db.commit()
+    return {
+        "leads_found": len(results),
+        "created": created,
+        "updated": 0,
+        "skipped_duplicates": skipped,
     }
 
 
@@ -280,6 +364,36 @@ def enrich_lead_email(lead_id: int, db: Session = Depends(get_db)):
         setattr(lead, key, value)
     db.commit()
     db.refresh(lead)
+    return lead
+
+
+@router.post("/leads/{lead_id}/enrich-hunter", response_model=LeadResponse)
+def enrich_lead_hunter(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    lead_dict = {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
+
+    domain = None
+    if lead_dict.get("website"):
+        from urllib.parse import urlparse
+        domain = urlparse(lead_dict["website"]).netloc
+        domain = domain.removeprefix("www.").lower()
+
+    if domain:
+        import os
+        api_key = os.getenv("HUNTER_API_KEY", "").strip()
+        if api_key:
+            emails = hunter_email_search(domain, api_key)
+            if emails:
+                best = emails[0]
+                lead.email = best.get("value")
+                lead.email_source = "hunter"
+                lead.email_confidence = best.get("confidence", 0.5) / 100.0
+                lead.has_email = True
+                db.commit()
+                db.refresh(lead)
+
     return lead
 
 
