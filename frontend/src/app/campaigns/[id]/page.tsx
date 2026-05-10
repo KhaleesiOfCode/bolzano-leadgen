@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCampaign, previewCampaignLeads, addLeadsToCampaign, getCampaignLeads, approveCampaignLeads, sendCampaignEmail, updateCampaignStatus } from "@/lib/api";
+import { getCampaign, previewCampaignLeads, addLeadsToCampaign, getCampaignLeads, approveCampaignLeads, sendCampaignEmail, updateCampaignStatus, getTemplates } from "@/lib/api";
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -13,6 +13,7 @@ export default function CampaignDetailPage() {
   const [campaign, setCampaign] = useState<any>(null);
   const [previewLeads, setPreviewLeads] = useState<any[]>([]);
   const [campaignLeads, setCampaignLeads] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<number | null>(null);
@@ -23,10 +24,12 @@ export default function CampaignDetailPage() {
       getCampaign(id),
       previewCampaignLeads(id),
       getCampaignLeads(id),
-    ]).then(([c, p, cl]) => {
+      getTemplates(),
+    ]).then(([c, p, cl, t]) => {
       setCampaign(c);
       setPreviewLeads(p.leads);
       setCampaignLeads(cl);
+      setTemplates(t);
       setLoading(false);
     });
   }, [id]);
@@ -113,6 +116,18 @@ export default function CampaignDetailPage() {
           </div>
         </div>
       )}
+
+      {campaign.template_id && (() => {
+        const tmpl = templates.find(t => t.id === campaign.template_id);
+        return tmpl ? (
+          <div className="mb-6 bg-blue-50 rounded-xl p-4 border border-blue-200">
+            <h3 className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-2">Assigned Template</h3>
+            <p className="text-sm font-medium">{tmpl.name}</p>
+            <p className="text-xs text-blue-600 mt-0.5">{tmpl.subject}</p>
+            <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap line-clamp-4">{tmpl.body}</p>
+          </div>
+        ) : null;
+      })()}
 
       {/* Stage: Add Leads */}
       <div className="mb-8">

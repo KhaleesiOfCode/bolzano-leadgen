@@ -157,7 +157,11 @@ export default function CampaignsPage() {
             <div key={t.id} className="bg-white border border-gray-200 rounded-lg p-3 text-sm">
               <div className="font-medium">{t.name}</div>
               <div className="text-gray-500 text-xs mt-0.5">{t.subject}</div>
-              <div className="text-gray-400 text-xs mt-0.5 line-clamp-2">{t.body}</div>
+              <div className="flex gap-2 mt-1">
+                {t.business_group && <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">{t.business_group}</span>}
+                {t.business_subgroup && <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{t.business_subgroup}</span>}
+              </div>
+              <div className="text-gray-400 text-xs mt-1 line-clamp-2">{t.body}</div>
             </div>
           ))}
           {templates.length === 0 && <p className="text-sm text-gray-400 italic">No templates yet</p>}

@@ -1,9 +1,10 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base, migrate_database
+from app.database import engine, Base, migrate_database, SessionLocal
 from app.routes import router
 from app.campaign_models import EmailTemplate, Campaign, CampaignLead
+from app.seed_templates import seed_templates
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,6 +13,12 @@ logging.basicConfig(
 
 Base.metadata.create_all(bind=engine)
 migrate_database()
+
+db = SessionLocal()
+try:
+    seed_templates(db)
+finally:
+    db.close()
 
 app = FastAPI(
     title="Bolzano LeadGen",

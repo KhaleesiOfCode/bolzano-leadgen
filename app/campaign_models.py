@@ -12,6 +12,7 @@ class EmailTemplate(Base):
     subject = Column(String(500), nullable=False)
     body = Column(Text, nullable=False)
     business_group = Column(String(50), nullable=True)
+    business_subgroup = Column(String(50), nullable=True)
     language = Column(String(10), default="en")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

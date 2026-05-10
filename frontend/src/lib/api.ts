@@ -247,6 +247,7 @@ export interface Template {
   subject: string;
   body: string;
   business_group: string | null;
+  business_subgroup: string | null;
   language: string;
   created_at: string | null;
 }

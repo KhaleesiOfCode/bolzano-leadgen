@@ -21,6 +21,7 @@ class TemplateCreate(BaseModel):
     subject: str
     body: str
     business_group: Optional[str] = None
+    business_subgroup: Optional[str] = None
     language: str = "en"
 
 class TemplateResponse(BaseModel):
@@ -29,6 +30,7 @@ class TemplateResponse(BaseModel):
     subject: str
     body: str
     business_group: Optional[str] = None
+    business_subgroup: Optional[str] = None
     language: str
     created_at: Optional[datetime] = None
 
@@ -88,9 +90,23 @@ def list_campaigns(db: Session = Depends(get_db)):
 
 @router.post("/campaigns", response_model=CampaignResponse)
 def create_campaign(body: CampaignCreate, db: Session = Depends(get_db)):
+    template_id = body.template_id
+
+    if not template_id and body.filters:
+        bg = body.filters.get("business_group")
+        if bg:
+            tmpl = (
+                db.query(EmailTemplate)
+                .filter(EmailTemplate.business_group == bg)
+                .order_by(EmailTemplate.id)
+                .first()
+            )
+            if tmpl:
+                template_id = tmpl.id
+
     camp = Campaign(
         name=body.name,
-        template_id=body.template_id,
+        template_id=template_id,
         filters=body.filters,
         status="draft",
     )
@@ -239,7 +255,36 @@ def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = D
         db.commit()
         return {"status": "error", "error": "No email address"}
 
-    template = db.query(EmailTemplate).filter(EmailTemplate.id == camp.template_id).first() if camp.template_id else None
+    template = None
+    if camp.template_id:
+        template = db.query(EmailTemplate).filter(EmailTemplate.id == camp.template_id).first()
+
+    if not template:
+        bg = lead.business_group
+        sg = lead.business_subgroup
+        template = (
+            db.query(EmailTemplate)
+            .filter(
+                EmailTemplate.business_group == bg,
+                EmailTemplate.business_subgroup == sg,
+            )
+            .first()
+        )
+    if not template and lead.business_group:
+        template = (
+            db.query(EmailTemplate)
+            .filter(
+                EmailTemplate.business_group == lead.business_group,
+                EmailTemplate.business_subgroup.is_(None),
+            )
+            .first()
+        )
+    if not template:
+        template = (
+            db.query(EmailTemplate)
+            .filter(EmailTemplate.business_group.is_(None))
+            .first()
+        )
 
     subject = template.subject if template else "Hello from Bolzano LeadGen"
     body = template.body if template else ""
