@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, UniqueConstraint, Index
 from app.database import Base
 
 
@@ -8,6 +8,14 @@ class Lead(Base):
 
     __table_args__ = (
         UniqueConstraint("osm_type", "osm_id", name="uq_osm_type_id"),
+        Index("idx_lead_business_group", "business_group"),
+        Index("idx_lead_business_subgroup", "business_subgroup"),
+        Index("idx_lead_city", "city"),
+        Index("idx_lead_lead_status", "lead_status"),
+        Index("idx_lead_lead_score", "lead_score"),
+        Index("idx_lead_has_website", "has_website"),
+        Index("idx_lead_has_email", "has_email"),
+        Index("idx_lead_website_source", "website_source"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -68,4 +76,15 @@ NEW_COLUMNS = {
     "website_confidence": "FLOAT",
     "website_discovery_status": "VARCHAR(50)",
     "candidate_websites": "TEXT",
+}
+
+NEW_INDEXES: dict[str, list[str]] = {
+    "idx_lead_business_group": ["business_group"],
+    "idx_lead_business_subgroup": ["business_subgroup"],
+    "idx_lead_city": ["city"],
+    "idx_lead_lead_status": ["lead_status"],
+    "idx_lead_lead_score": ["lead_score"],
+    "idx_lead_has_website": ["has_website"],
+    "idx_lead_has_email": ["has_email"],
+    "idx_lead_website_source": ["website_source"],
 }

@@ -33,6 +33,14 @@ const STATUS_COLORS: Record<string, string> = {
   not_interested: "bg-gray-100 text-gray-800",
 };
 
+const SUBGROUPS_BY_GROUP: Record<string, string[]> = {
+  food: ["restaurant", "cafe", "bar", "fast_food", "bakery", "pastry_shop", "ice_cream", "pub", "home_baker_candidate", "confectionery", "deli", "coffee_shop", "catering"],
+  beauty: ["hair_salon", "beauty_salon", "nail_salon", "cosmetics_studio", "spa", "tanning_salon", "tattoo_studio", "perfumery", "fitness_centre"],
+  healthcare: ["doctor", "dental_clinic", "pharmacy", "clinic", "veterinary", "hospital", "physiotherapy", "optometrist", "psychotherapy"],
+  services: ["optician", "massage", "laundry", "pet_shop", "photographer", "real_estate", "lawyer", "accountant", "fitness_centre", "driving_school", "bicycle_repair", "electronics_repair", "tailor", "childcare", "shoemaker"],
+  digital_marketing: ["digital_agency", "marketing_agency", "advertising_agency", "web_design", "it_consulting", "software_development", "graphic_design", "consulting", "marketing", "public_relations"],
+};
+
 export default function LeadsPageWrapper() {
   return (
     <Suspense fallback={<div className="max-w-7xl mx-auto p-6"><p className="text-gray-500">Loading...</p></div>}>
@@ -115,6 +123,15 @@ function LeadsPage() {
     router.push(`/leads?${p.toString()}`);
   }
 
+  function exportCsvUrlWithFilters(params: Record<string, string | undefined>): string {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v) q.set(k, v);
+    }
+    const qs = q.toString();
+    return `http://127.0.0.1:8000/leads/export/csv${qs ? `?${qs}` : ""}`;
+  }
+
   const cities = stats?.by_city ? Object.keys(stats.by_city).sort() : ["Bolzano"];
 
   return (
@@ -136,7 +153,7 @@ function LeadsPage() {
             Filters {activeFilters > 0 ? `(${activeFilters})` : ""}
           </button>
           <a
-            href="http://127.0.0.1:8000/leads/export/csv"
+            href={exportCsvUrlWithFilters({ business_group: businessGroup || undefined, business_subgroup: businessSubgroup || undefined, lead_status: leadStatus || undefined, has_website: hasWebsite || undefined, city: city || undefined, website_source: websiteSource || undefined })}
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             Export CSV
@@ -154,24 +171,26 @@ function LeadsPage() {
         <div className="mb-6 bg-white border border-gray-200 rounded-xl shadow-sm p-5">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <FilterSection label="Business Group">
-              <FilterChip active={!businessGroup} href={filterUrl({ business_group: "" })} label="All" />
+              <FilterChip active={!businessGroup} href={filterUrl({ business_group: "", business_subgroup: "" })} label="All" />
               {BUSINESS_GROUPS.map((g) => (
-                <FilterChip key={g} active={businessGroup === g} href={filterUrl({ business_group: g })} label={GROUP_LABELS[g] || g} />
+                <FilterChip key={g} active={businessGroup === g} href={filterUrl({ business_group: g, business_subgroup: "" })} label={GROUP_LABELS[g] || g} />
               ))}
             </FilterSection>
 
             <FilterSection label="Subgroup">
-              <FilterChip active={!businessSubgroup} href={filterUrl({ business_subgroup: "" })} label="All" />
-              <FilterChip active={businessSubgroup === "restaurant"} href={filterUrl({ business_subgroup: "restaurant" })} label="Restaurant" />
-              <FilterChip active={businessSubgroup === "cafe"} href={filterUrl({ business_subgroup: "cafe" })} label="Cafe" />
-              <FilterChip active={businessSubgroup === "bakery"} href={filterUrl({ business_subgroup: "bakery" })} label="Bakery" />
-              <FilterChip active={businessSubgroup === "bar"} href={filterUrl({ business_subgroup: "bar" })} label="Bar" />
-              <FilterChip active={businessSubgroup === "home_baker_candidate"} href={filterUrl({ business_subgroup: "home_baker_candidate" })} label="Home Baker" />
-              <FilterChip active={businessSubgroup === "nail_salon"} href={filterUrl({ business_subgroup: "nail_salon" })} label="Nail Salon" />
-              <FilterChip active={businessSubgroup === "hair_salon"} href={filterUrl({ business_subgroup: "hair_salon" })} label="Hair Salon" />
-              <FilterChip active={businessSubgroup === "beauty_salon"} href={filterUrl({ business_subgroup: "beauty_salon" })} label="Beauty Salon" />
-              <FilterChip active={businessSubgroup === "digital_agency"} href={filterUrl({ business_subgroup: "digital_agency" })} label="Digital Agency" />
-              <FilterChip active={businessSubgroup === "marketing_agency"} href={filterUrl({ business_subgroup: "marketing_agency" })} label="Marketing Agency" />
+              {!businessGroup ? (
+                <>
+                  <FilterChip active={!businessSubgroup} href={filterUrl({ business_subgroup: "" })} label="All" />
+                  <p className="text-xs text-gray-400 italic w-full">Select a business group first</p>
+                </>
+              ) : (
+                <>
+                  <FilterChip active={!businessSubgroup} href={filterUrl({ business_subgroup: "" })} label="All" />
+                  {(SUBGROUPS_BY_GROUP[businessGroup] || []).map((sg) => (
+                    <FilterChip key={sg} active={businessSubgroup === sg} href={filterUrl({ business_subgroup: sg })} label={sg.replace(/_/g, " ")} />
+                  ))}
+                </>
+              )}
             </FilterSection>
 
             <FilterSection label="Lead Status">

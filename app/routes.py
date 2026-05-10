@@ -316,8 +316,69 @@ def accept_candidate_website(
 
 
 @router.get("/leads/export/csv")
-def export_leads_csv(db: Session = Depends(get_db)):
-    leads = db.query(Lead).all()
+def export_leads_csv(
+    has_website: Optional[str] = Query(None),
+    lead_status: Optional[str] = Query(None),
+    business_group: Optional[str] = Query(None),
+    business_subgroup: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    municipality: Optional[str] = Query(None),
+    province: Optional[str] = Query(None),
+    search_area: Optional[str] = Query(None),
+    website_status: Optional[str] = Query(None),
+    website_discovery_status: Optional[str] = Query(None),
+    website_source: Optional[str] = Query(None),
+    min_score: Optional[int] = Query(None, ge=0),
+    max_score: Optional[int] = Query(None, ge=0),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Lead)
+
+    if has_website is not None:
+        if has_website.lower() == "true":
+            query = query.filter(Lead.has_website.is_(True))
+        elif has_website.lower() == "false":
+            query = query.filter(Lead.has_website.is_(False))
+
+    if lead_status is not None:
+        query = query.filter(Lead.lead_status == lead_status)
+
+    if business_group is not None:
+        groups = [g.strip() for g in business_group.split(",")]
+        query = query.filter(Lead.business_group.in_(groups))
+
+    if business_subgroup is not None:
+        subgroups = [s.strip() for s in business_subgroup.split(",")]
+        query = query.filter(Lead.business_subgroup.in_(subgroups))
+
+    if city is not None:
+        query = query.filter(Lead.city.ilike(f"%{city}%"))
+
+    if municipality is not None:
+        query = query.filter(Lead.municipality.ilike(f"%{municipality}%"))
+
+    if province is not None:
+        query = query.filter(Lead.province.ilike(f"%{province}%"))
+
+    if search_area is not None:
+        query = query.filter(Lead.search_area.ilike(f"%{search_area}%"))
+
+    if website_status is not None:
+        query = query.filter(Lead.website_status == website_status)
+
+    if website_discovery_status is not None:
+        query = query.filter(Lead.website_discovery_status == website_discovery_status)
+
+    if website_source is not None:
+        query = query.filter(Lead.website_source == website_source)
+
+    if min_score is not None:
+        query = query.filter(Lead.lead_score >= min_score)
+
+    if max_score is not None:
+        query = query.filter(Lead.lead_score <= max_score)
+
+    leads = query.order_by(Lead.lead_score.desc()).all()
     output = io.StringIO()
     writer = csv.writer(output)
     headers = [

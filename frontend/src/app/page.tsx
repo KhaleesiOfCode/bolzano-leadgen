@@ -140,6 +140,12 @@ export default function Dashboard() {
           >
             View Leads
           </Link>
+          <Link
+            href="/campaigns"
+            className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Campaigns
+          </Link>
           <button
             onClick={() => handleScrape("bolzano")}
             disabled={scraping}

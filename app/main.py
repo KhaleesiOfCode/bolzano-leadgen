@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base, migrate_database
 from app.routes import router
+from app.campaign_models import EmailTemplate, Campaign, CampaignLead
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,8 +15,8 @@ migrate_database()
 
 app = FastAPI(
     title="Bolzano LeadGen",
-    description="Lead-generation tool for Bolzano businesses",
-    version="0.2.0",
+    description="Lead-generation tool for South Tyrol businesses",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -26,3 +27,6 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+from app.campaign_routes import router as campaign_router
+app.include_router(campaign_router)

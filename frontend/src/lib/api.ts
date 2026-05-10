@@ -238,3 +238,91 @@ export function searchWebsitesBatch(params?: {
 export function exportCsvUrl(): string {
   return `http://127.0.0.1:8000/leads/export/csv`;
 }
+
+// ─── Campaigns ───────────────────────────────────────────
+
+export interface Template {
+  id: number;
+  name: string;
+  subject: string;
+  body: string;
+  business_group: string | null;
+  language: string;
+  created_at: string | null;
+}
+
+export interface Campaign {
+  id: number;
+  name: string;
+  template_id: number | null;
+  filters: Record<string, string> | null;
+  status: string;
+  sent_count: number;
+  open_count: number;
+  reply_count: number;
+  created_at: string | null;
+}
+
+export function getTemplates(): Promise<Template[]> {
+  return fetcher("/campaigns/templates");
+}
+
+export function createTemplate(body: { name: string; subject: string; body: string; business_group?: string; language?: string }): Promise<Template> {
+  return fetcher("/campaigns/templates", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteTemplate(id: number): Promise<{ ok: boolean }> {
+  return fetcher(`/campaigns/templates/${id}`, { method: "DELETE" });
+}
+
+export function getCampaigns(): Promise<Campaign[]> {
+  return fetcher("/campaigns");
+}
+
+export function createCampaign(body: { name: string; template_id?: number; filters?: Record<string, string> }): Promise<Campaign> {
+  return fetcher("/campaigns", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getCampaign(id: number): Promise<Campaign> {
+  return fetcher(`/campaigns/${id}`);
+}
+
+export function updateCampaignStatus(id: number, status: string): Promise<{ status: string }> {
+  return fetcher(`/campaigns/${id}/status?status=${encodeURIComponent(status)}`, { method: "PATCH" });
+}
+
+export function previewCampaignLeads(id: number): Promise<{ leads: any[]; total: number }> {
+  return fetcher(`/campaigns/${id}/preview-leads`, { method: "POST" });
+}
+
+export function addLeadsToCampaign(id: number, leadIds: number[]): Promise<{ added: number }> {
+  return fetcher(`/campaigns/${id}/add-leads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lead_ids: leadIds }),
+  });
+}
+
+export function getCampaignLeads(id: number): Promise<any[]> {
+  return fetcher(`/campaigns/${id}/leads`);
+}
+
+export function approveCampaignLeads(id: number, leadIds: number[]): Promise<{ approved: number }> {
+  return fetcher(`/campaigns/${id}/approve-leads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lead_ids: leadIds }),
+  });
+}
+
+export function sendCampaignEmail(campaignId: number, campaignLeadId: number): Promise<any> {
+  return fetcher(`/campaigns/${campaignId}/send/${campaignLeadId}`, { method: "POST" });
+}
