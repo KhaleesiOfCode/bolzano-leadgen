@@ -266,7 +266,7 @@ def _element_to_lead(element: dict, search_area: str = "Bolzano") -> dict[str, A
 
 
 def scrape_bolzano() -> list[dict[str, Any]]:
-    return scrape_area(BOLZANO_BBOX, search_area="Bolzano")
+    return scrape_area(CITY_BBOXES["bolzano"], search_area="Bolzano")
 
 
 def scrape_south_tyrol() -> list[dict[str, Any]]:
