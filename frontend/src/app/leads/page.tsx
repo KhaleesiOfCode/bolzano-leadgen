@@ -139,7 +139,7 @@ function LeadsPage() {
     router.push(`/leads?${p.toString()}`);
   }
 
-  const activeFilters = { business_group: businessGroup, business_subgroup: businessSubgroup, lead_status: leadStatus, has_website: hasWebsite, city, website_source };
+  const activeFilters = { business_group: businessGroup, business_subgroup: businessSubgroup, lead_status: leadStatus, has_website: hasWebsite, city, website_source: websiteSource };
   const activeCount = Object.values(activeFilters).filter(Boolean).length;
   const cities = stats?.by_city ? Object.keys(stats.by_city).sort() : ["Bolzano"];
 

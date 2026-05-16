@@ -7,11 +7,17 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.models import Lead
+from app.models import Lead, ActivityLog
 from app.campaign_models import EmailTemplate, Campaign, CampaignLead
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _log(db: Session, lead_id: int, action: str, details: dict | None = None):
+    log = ActivityLog(lead_id=lead_id, action=action, details=json.dumps(details) if details else None)
+    db.add(log)
+    db.flush()
 
 
 # ─── Schemas ─────────────────────────────────────────────
@@ -252,6 +258,7 @@ def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = D
     if not lead or not lead.email:
         cl.status = "error"
         cl.error = "No email address"
+        _log(db, lead.id, "campaign_email_error", {"campaign_id": campaign_id, "error": "No email address"})
         db.commit()
         return {"status": "error", "error": "No email address"}
 
@@ -308,6 +315,7 @@ def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = D
     cl.status = "sent"
     cl.sent_at = datetime.now(timezone.utc)
     camp.sent_count = (camp.sent_count or 0) + 1
+    _log(db, lead.id, "campaign_email_sent", {"campaign_id": campaign_id, "campaign": camp.name, "subject": subject, "to": lead.email})
     db.commit()
 
     return {
@@ -328,6 +336,7 @@ def track_open(campaign_lead_id: int, db: Session = Depends(get_db)):
         camp = db.query(Campaign).filter(Campaign.id == cl.campaign_id).first()
         if camp:
             camp.open_count = (camp.open_count or 0) + 1
+        _log(db, cl.lead_id, "campaign_email_opened", {"campaign_id": cl.campaign_id, "campaign_lead_id": campaign_lead_id})
         db.commit()
     return {"status": "ok"}
 
@@ -343,5 +352,6 @@ def track_reply(body: dict, db: Session = Depends(get_db)):
         camp = db.query(Campaign).filter(Campaign.id == cl.campaign_id).first()
         if camp:
             camp.reply_count = (camp.reply_count or 0) + 1
+        _log(db, cl.lead_id, "campaign_email_replied", {"campaign_id": cl.campaign_id, "campaign_lead_id": campaign_lead_id})
         db.commit()
     return {"status": "ok"}

@@ -457,9 +457,12 @@ export default function LeadDetail() {
                   <div key={log.id} className="flex gap-3 text-sm">
                     <div className="flex flex-col items-center">
                       <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                        log.action.startsWith("email") ? "bg-blue-400" :
+                        log.action.startsWith("email") || log.action.startsWith("campaign_email") ? "bg-blue-400" :
                         log.action.startsWith("status") ? "bg-green-400" :
                         log.action.startsWith("website") || log.action.startsWith("note") ? "bg-amber-400" :
+                        log.action === "campaign_email_sent" ? "bg-indigo-400" :
+                        log.action === "campaign_email_opened" ? "bg-teal-400" :
+                        log.action === "campaign_email_replied" ? "bg-emerald-400" :
                         "bg-gray-400"
                       }`} />
                       <div className="w-px grow bg-gray-200 min-h-[24px]" />
@@ -482,10 +485,25 @@ export default function LeadDetail() {
                         })() : log.action === "website_accepted" ? (() => {
                           try { const d = JSON.parse(log.details || "{}"); return <>Website accepted: <span className="font-medium">{d.website}</span></>; }
                           catch { return "Website accepted"; }
+                        })() : log.action === "website_discovered" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Website discovered via {d.source || "search"}: <span className="font-medium">{d.website}</span></>; }
+                          catch { return "Website discovered"; }
                         })() : log.action === "notes_updated" ? "Notes updated" :
                         log.action === "email_enriched" ? (() => {
-                          try { const d = JSON.parse(log.details || "{}"); return <>Email found: <span className="font-medium">{d.email}</span></>; }
+                          try { const d = JSON.parse(log.details || "{}"); return <>Email found via <span className="font-medium">{d.source || "website"}</span>: {d.email}</>; }
                           catch { return "Email enriched"; }
+                        })() : log.action === "campaign_email_sent" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email sent: <span className="font-medium">{d.subject}</span></>; }
+                          catch { return "Campaign email sent"; }
+                        })() : log.action === "campaign_email_error" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email failed: {d.error}</>; }
+                          catch { return "Campaign email error"; }
+                        })() : log.action === "campaign_email_opened" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email opened</>; }
+                          catch { return "Email opened"; }
+                        })() : log.action === "campaign_email_replied" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email reply received</>; }
+                          catch { return "Email replied"; }
                         })() : log.action?.replace(/_/g, " ")}
                       </p>
                       <p className="text-gray-400 text-xs mt-0.5">

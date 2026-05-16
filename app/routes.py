@@ -470,6 +470,7 @@ def enrich_lead_hunter(lead_id: int, db: Session = Depends(get_db)):
                 lead.email_source = "hunter"
                 lead.email_confidence = best.get("confidence", 0.5) / 100.0
                 lead.has_email = True
+                _log(db, lead_id, "email_enriched", {"email": lead.email, "source": "hunter", "confidence": lead.email_confidence})
                 db.commit()
                 db.refresh(lead)
 
@@ -522,6 +523,7 @@ def search_lead_website_google(lead_id: int, db: Session = Depends(get_db)):
         lead.website_source = result.get("url_type") or result.get("source")
         lead.website_confidence = result.get("confidence", 0.0)
         lead.website_discovery_status = result.get("status", "needs_manual_verification")
+        _log(db, lead_id, "website_discovered", {"website": result["website"], "source": result.get("source"), "confidence": result.get("confidence")})
         db.commit()
         db.refresh(lead)
 
