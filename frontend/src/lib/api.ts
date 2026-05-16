@@ -1,4 +1,4 @@
-const BASE = "http://127.0.0.1:8000";
+const BASE = "/api";
 
 export interface Lead {
   id: number;
@@ -39,6 +39,9 @@ export interface Lead {
   lead_score: number;
   lead_status: string;
   notes: string | null;
+  email_draft_subject: string | null;
+  email_draft_body: string | null;
+  email_draft_status: string;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -53,7 +56,7 @@ export interface Stats {
   avg_lead_score: number;
   with_email: number;
   with_website: number;
-  needs_manual_verification: number;
+  verified_no_website: number;
   official_websites: number;
   social_only: number;
   booking_platform_only: number;
@@ -236,7 +239,7 @@ export function searchWebsitesBatch(params?: {
 }
 
 export function exportCsvUrl(): string {
-  return `http://127.0.0.1:8000/leads/export/csv`;
+  return `/api/leads/export/csv`;
 }
 
 // ─── Campaigns ───────────────────────────────────────────
@@ -326,4 +329,43 @@ export function approveCampaignLeads(id: number, leadIds: number[]): Promise<{ a
 
 export function sendCampaignEmail(campaignId: number, campaignLeadId: number): Promise<any> {
   return fetcher(`/campaigns/${campaignId}/send/${campaignLeadId}`, { method: "POST" });
+}
+
+// ─── Email Generation ─────────────────────────────────────
+
+export interface EmailDraft {
+  subject: string | null;
+  body: string | null;
+  error: string | null;
+  lead_id: number;
+}
+
+export function generateLeadEmail(leadId: number): Promise<EmailDraft> {
+  return fetcher(`/leads/${leadId}/generate-email`, { method: "POST" });
+}
+
+export function saveEmailDraft(leadId: number, subject: string, body: string): Promise<{ status: string; lead_id: number }> {
+  return fetcher(`/leads/${leadId}/save-email-draft`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subject, body }),
+  });
+}
+
+export function markEmailReady(leadId: number): Promise<{ status: string; lead_id: number }> {
+  return fetcher(`/leads/${leadId}/mark-email-ready`, { method: "POST" });
+}
+
+// ─── Activity Log ─────────────────────────────────────────
+
+export interface ActivityLogEntry {
+  id: number;
+  lead_id: number;
+  action: string;
+  details: string | null;
+  created_at: string | null;
+}
+
+export function getActivityLogs(leadId: number): Promise<ActivityLogEntry[]> {
+  return fetcher(`/leads/${leadId}/activity`);
 }

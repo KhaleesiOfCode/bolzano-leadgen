@@ -9,7 +9,7 @@ from app.website_classifier import classify_url
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "BolzanoLeadGen/1.0 (educational project; contact@example.com)"
+USER_AGENT = "BolzanoLeadGen/2.0"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 WEBSITE_VERIFY_TIMEOUT = 10
 
@@ -138,15 +138,14 @@ digital_marketing_tags = [
 ALL_TAGS = food_tags + beauty_tags + healthcare_tags + services_tags + digital_marketing_tags
 
 
+BUSINESS_KEYS_PATTERN = "^(amenity|shop|craft|office|healthcare|leisure)$"
+
 def _build_query(bbox: str) -> str:
-    lines = ["[out:json];", "("]
-    for key, value, _grp, _sub in ALL_TAGS:
-        lines.append(f'  node["{key}"="{value}"]({bbox});')
-        lines.append(f'  way["{key}"="{value}"]({bbox});')
-        lines.append(f'  relation["{key}"="{value}"]({bbox});')
-    lines.append(");")
-    lines.append("out body center;")
-    return "\n".join(lines)
+    parts = []
+    for elem in ("node", "way", "relation"):
+        parts.append(f"{elem}[~\"{BUSINESS_KEYS_PATTERN}\"~\".\"]({bbox})")
+    joined = "(" + ";".join(parts) + ";);"
+    return f"[out:json];{joined}out body center;"
 
 
 def _tag(element: dict, *keys: str) -> str | None:
@@ -206,23 +205,16 @@ def _element_to_lead(element: dict, search_area: str = "Bolzano") -> dict[str, A
     business_subgroup = classification["business_subgroup"]
     classification_confidence = classification["classification_confidence"]
 
-    reachable, reachability = False, "unknown"
     if website:
-        reachable, reachability = _verify_website(website)
-
-    if website is None:
-        website_status = "missing_in_osm"
-        lead_status = "needs_manual_verification"
-    elif reachable:
-        website_status = "verified"
+        website_status = "present_in_osm"
         lead_status = "new"
     else:
-        website_status = reachability
-        lead_status = "needs_manual_verification"
+        website_status = "missing_in_osm"
+        lead_status = "new"
 
     url_class = classify_url(website)
     website_source = url_class["url_type"] if website else None
-    website_confidence = 1.0 if reachable else 0.0
+    website_confidence = 1.0 if website else 0.0
 
     city = tags.get("addr:city", "Bolzano")
 
@@ -291,7 +283,9 @@ def scrape_area(bbox: str, search_area: str = "Bolzano") -> list[dict[str, Any]]
         resp = requests.post(
             OVERPASS_URL,
             data={"data": query},
-            headers={"User-Agent": USER_AGENT},
+            headers={
+                "User-Agent": USER_AGENT,
+            },
             timeout=180,
         )
         resp.raise_for_status()

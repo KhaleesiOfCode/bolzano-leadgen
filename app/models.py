@@ -1,5 +1,6 @@
+import json
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, Index
 from app.database import Base
 
 
@@ -56,6 +57,9 @@ class Lead(Base):
     lead_score = Column(Integer, default=0)
     lead_status = Column(String(50), default="new")
     notes = Column(Text, nullable=True)
+    email_draft_subject = Column(String(500), nullable=True)
+    email_draft_body = Column(Text, nullable=True)
+    email_draft_status = Column(String(50), default="not_generated")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime,
@@ -64,7 +68,20 @@ class Lead(Base):
     )
 
 
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    action = Column(String(100), nullable=False)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 NEW_COLUMNS = {
+    "email_draft_subject": "VARCHAR(500)",
+    "email_draft_body": "TEXT",
+    "email_draft_status": "VARCHAR(50)",
     "business_subgroup": "VARCHAR(50)",
     "classification_confidence": "FLOAT",
     "municipality": "VARCHAR(100)",

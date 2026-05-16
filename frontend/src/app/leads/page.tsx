@@ -25,12 +25,18 @@ const GROUP_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  new: "bg-green-100 text-green-800",
-  needs_manual_verification: "bg-amber-100 text-amber-800",
-  contacted: "bg-blue-100 text-blue-800",
-  responded: "bg-purple-100 text-purple-800",
-  converted: "bg-emerald-100 text-emerald-800",
-  not_interested: "bg-gray-100 text-gray-800",
+  new: "bg-blue-100 text-blue-800",
+  verified_no_website: "bg-amber-100 text-amber-800",
+  verified_weak_website: "bg-orange-100 text-orange-800",
+  not_relevant: "bg-gray-100 text-gray-800",
+  contacted: "bg-indigo-100 text-indigo-800",
+  follow_up_needed: "bg-yellow-100 text-yellow-800",
+  interested: "bg-green-100 text-green-800",
+  call_booked: "bg-teal-100 text-teal-800",
+  proposal_sent: "bg-purple-100 text-purple-800",
+  won: "bg-emerald-100 text-emerald-800",
+  lost: "bg-red-100 text-red-800",
+  do_not_contact: "bg-gray-800 text-white",
 };
 
 const SUBGROUPS_BY_GROUP: Record<string, string[]> = {
@@ -129,7 +135,7 @@ function LeadsPage() {
       if (v) q.set(k, v);
     }
     const qs = q.toString();
-    return `http://127.0.0.1:8000/leads/export/csv${qs ? `?${qs}` : ""}`;
+    return `/api/leads/export/csv${qs ? `?${qs}` : ""}`;
   }
 
   const cities = stats?.by_city ? Object.keys(stats.by_city).sort() : ["Bolzano"];
@@ -196,11 +202,12 @@ function LeadsPage() {
             <FilterSection label="Lead Status">
               <FilterChip active={!leadStatus} href={filterUrl({ lead_status: "" })} label="All" />
               <FilterChip active={leadStatus === "new"} href={filterUrl({ lead_status: "new" })} label="New" />
-              <FilterChip active={leadStatus === "needs_manual_verification"} href={filterUrl({ lead_status: "needs_manual_verification" })} label="Needs Verification" />
+              <FilterChip active={leadStatus === "verified_no_website"} href={filterUrl({ lead_status: "verified_no_website" })} label="Verified - No Website" />
               <FilterChip active={leadStatus === "contacted"} href={filterUrl({ lead_status: "contacted" })} label="Contacted" />
-              <FilterChip active={leadStatus === "responded"} href={filterUrl({ lead_status: "responded" })} label="Responded" />
-              <FilterChip active={leadStatus === "converted"} href={filterUrl({ lead_status: "converted" })} label="Converted" />
-              <FilterChip active={leadStatus === "not_interested"} href={filterUrl({ lead_status: "not_interested" })} label="Not Interested" />
+              <FilterChip active={leadStatus === "interested"} href={filterUrl({ lead_status: "interested" })} label="Interested" />
+              <FilterChip active={leadStatus === "won"} href={filterUrl({ lead_status: "won" })} label="Won" />
+              <FilterChip active={leadStatus === "lost"} href={filterUrl({ lead_status: "lost" })} label="Lost" />
+              <FilterChip active={leadStatus === "do_not_contact"} href={filterUrl({ lead_status: "do_not_contact" })} label="Do Not Contact" />
             </FilterSection>
 
             <FilterSection label="Website">

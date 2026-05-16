@@ -176,7 +176,7 @@ export default function Dashboard() {
             <StatCard label="With Website" value={stats.with_website} />
             <StatCard label="With Email" value={stats.with_email} />
             <StatCard label="Avg Score" value={stats.avg_lead_score} />
-            <StatCard label="Needs Verification" value={stats.needs_manual_verification} />
+            <StatCard label="Verified - No Website" value={stats.verified_no_website} />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -266,8 +266,8 @@ export default function Dashboard() {
                 <Link href="/leads?website_source=social" className="block px-3 py-2 bg-purple-50 text-purple-800 rounded-lg hover:bg-purple-100">
                   Social-only businesses
                 </Link>
-                <Link href="/leads?lead_status=needs_manual_verification" className="block px-3 py-2 bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100">
-                  Needs manual verification
+                <Link href="/leads?lead_status=verified_no_website" className="block px-3 py-2 bg-amber-50 text-amber-800 rounded-lg hover:bg-amber-100">
+                  Verified - no website
                 </Link>
                 <Link href="/leads?business_group=digital_marketing" className="block px-3 py-2 bg-purple-50 text-purple-800 rounded-lg hover:bg-purple-100">
                   Digital marketing agencies

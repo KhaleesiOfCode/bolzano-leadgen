@@ -1,5 +1,6 @@
 import io
 import csv
+import json
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,22 +9,32 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Lead
+from app.models import Lead, ActivityLog
 from app.schemas import (
     LeadCreate,
     LeadResponse,
     LeadStatusUpdate,
     LeadNotesUpdate,
+    EmailDraftResponse,
+    EmailDraftSave,
+    ActivityLogResponse,
     StatsResponse,
 )
 from app.osm_scraper import scrape_bolzano, scrape_south_tyrol, scrape_city
 from app.lead_scoring import calculate_score
+from app.email_generator import generate_email
 from app.email_extractor import enrich_lead_with_email, hunter_email_search
 from app.website_classifier import classify_url
 from app.google_places import search_business_website, search_digital_agencies
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _log(db: Session, lead_id: int, action: str, details: dict | None = None):
+    log = ActivityLog(lead_id=lead_id, action=action, details=json.dumps(details) if details else None)
+    db.add(log)
+    db.flush()
 
 
 @router.get("/")
@@ -247,7 +258,9 @@ def update_lead_status(
     lead = db.query(Lead).filter(Lead.id == lead_id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
+    old_status = lead.lead_status
     lead.lead_status = body.lead_status
+    _log(db, lead_id, "status_changed", {"from": old_status, "to": body.lead_status})
     db.commit()
     db.refresh(lead)
     return lead
@@ -263,6 +276,7 @@ def update_lead_notes(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     lead.notes = body.notes
+    _log(db, lead_id, "notes_updated")
     db.commit()
     db.refresh(lead)
     return lead
@@ -284,6 +298,7 @@ def update_lead_website(
         lead.has_website = True
         lead.website_source = classification["url_type"]
         lead.website_discovery_status = "official_website_found"
+        _log(db, lead_id, "website_updated", {"website": website, "source": classification["url_type"]})
     db.commit()
     db.refresh(lead)
     return lead
@@ -310,6 +325,7 @@ def accept_candidate_website(
     lead.lead_score = calculate_score(
         {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
     )
+    _log(db, lead_id, "website_accepted", {"website": website, "source": classification["url_type"]})
     db.commit()
     db.refresh(lead)
     return {"status": "accepted", "website": website}
@@ -423,6 +439,8 @@ def enrich_lead_email(lead_id: int, db: Session = Depends(get_db)):
     enriched = enrich_lead_with_email(lead_dict)
     for key, value in enriched.items():
         setattr(lead, key, value)
+    if enriched.get("email"):
+        _log(db, lead_id, "email_enriched", {"email": enriched["email"], "source": enriched.get("email_source")})
     db.commit()
     db.refresh(lead)
     return lead
@@ -555,14 +573,74 @@ def search_websites_google_batch(
     return {"processed": len(leads), "found": found, "errors": errors}
 
 
+@router.post("/leads/{lead_id}/generate-email", response_model=EmailDraftResponse)
+def generate_lead_email(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    lead_dict = {c.name: getattr(lead, c.name) for c in lead.__table__.columns}
+    result = generate_email(lead_dict)
+
+    if result.get("subject") and result.get("body"):
+        lead.email_draft_subject = result["subject"]
+        lead.email_draft_body = result["body"]
+        lead.email_draft_status = "draft_generated"
+        _log(db, lead_id, "email_generated", {"subject": result["subject"]})
+        db.commit()
+        db.refresh(lead)
+
+    return EmailDraftResponse(
+        subject=result.get("subject"),
+        body=result.get("body"),
+        error=result.get("error"),
+        lead_id=lead.id,
+    )
+
+
+@router.post("/leads/{lead_id}/save-email-draft")
+def save_lead_email_draft(lead_id: int, body: EmailDraftSave, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    lead.email_draft_subject = body.subject
+    lead.email_draft_body = body.body
+    lead.email_draft_status = "draft_saved"
+    _log(db, lead_id, "email_draft_saved", {"subject": body.subject})
+    db.commit()
+    return {"status": "saved", "lead_id": lead.id}
+
+
+@router.post("/leads/{lead_id}/mark-email-ready")
+def mark_email_ready(lead_id: int, db: Session = Depends(get_db)):
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    lead.email_draft_status = "ready_to_send"
+    _log(db, lead_id, "email_marked_ready", {"subject": lead.email_draft_subject})
+    db.commit()
+    return {"status": "ready_to_send", "lead_id": lead.id}
+
+
+@router.get("/leads/{lead_id}/activity", response_model=list[ActivityLogResponse])
+def get_lead_activity(lead_id: int, db: Session = Depends(get_db)):
+    return (
+        db.query(ActivityLog)
+        .filter(ActivityLog.lead_id == lead_id)
+        .order_by(ActivityLog.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+
 @router.get("/stats", response_model=StatsResponse)
 def get_stats(db: Session = Depends(get_db)):
     total = db.query(func.count(Lead.id)).scalar() or 0
     avg_score = db.query(func.avg(Lead.lead_score)).scalar() or 0.0
     with_email = db.query(Lead).filter(Lead.has_email.is_(True)).count()
     with_website = db.query(Lead).filter(Lead.has_website.is_(True)).count()
-    needs_manual = (
-        db.query(Lead).filter(Lead.lead_status == "needs_manual_verification").count()
+    verified_no_website = (
+        db.query(Lead).filter(Lead.lead_status == "verified_no_website").count()
     )
     official_websites = db.query(Lead).filter(Lead.website_source == "official").count()
     social_only = db.query(Lead).filter(Lead.website_source == "social").count()
@@ -628,7 +706,7 @@ def get_stats(db: Session = Depends(get_db)):
         avg_lead_score=round(float(avg_score), 2),
         with_email=with_email,
         with_website=with_website,
-        needs_manual_verification=needs_manual,
+        verified_no_website=verified_no_website,
         official_websites=official_websites,
         social_only=social_only,
         booking_platform_only=booking_platform_only,

@@ -127,8 +127,33 @@ class LeadResponse(BaseModel):
     lead_score: int = 0
     lead_status: str = "new"
     notes: Optional[str] = None
+    email_draft_subject: Optional[str] = None
+    email_draft_body: Optional[str] = None
+    email_draft_status: str = "not_generated"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailDraftResponse(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    error: Optional[str] = None
+    lead_id: int
+
+
+class EmailDraftSave(BaseModel):
+    subject: str
+    body: str
+
+
+class ActivityLogResponse(BaseModel):
+    id: int
+    lead_id: int
+    action: str
+    details: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -143,7 +168,7 @@ class StatsResponse(BaseModel):
     avg_lead_score: float = 0.0
     with_email: int = 0
     with_website: int = 0
-    needs_manual_verification: int = 0
+    verified_no_website: int = 0
     official_websites: int = 0
     social_only: int = 0
     booking_platform_only: int = 0

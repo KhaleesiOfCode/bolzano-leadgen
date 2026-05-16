@@ -3,25 +3,37 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import type { Lead } from "@/lib/api";
-import { getLead, updateLeadStatus, updateLeadNotes, enrichLead, acceptCandidateWebsite, searchLeadWebsite } from "@/lib/api";
+import type { Lead, EmailDraft, ActivityLogEntry } from "@/lib/api";
+import { getLead, updateLeadStatus, updateLeadNotes, enrichLead, acceptCandidateWebsite, searchLeadWebsite, generateLeadEmail, saveEmailDraft, markEmailReady, getActivityLogs } from "@/lib/api";
 
 const STATUS_OPTIONS = [
   "new",
-  "needs_manual_verification",
+  "verified_no_website",
+  "verified_weak_website",
+  "not_relevant",
   "contacted",
-  "responded",
-  "converted",
-  "not_interested",
+  "follow_up_needed",
+  "interested",
+  "call_booked",
+  "proposal_sent",
+  "won",
+  "lost",
+  "do_not_contact",
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  new: "bg-green-100 text-green-800",
-  needs_manual_verification: "bg-amber-100 text-amber-800",
-  contacted: "bg-blue-100 text-blue-800",
-  responded: "bg-purple-100 text-purple-800",
-  converted: "bg-emerald-100 text-emerald-800",
-  not_interested: "bg-gray-100 text-gray-800",
+  new: "bg-blue-100 text-blue-800",
+  verified_no_website: "bg-amber-100 text-amber-800",
+  verified_weak_website: "bg-orange-100 text-orange-800",
+  not_relevant: "bg-gray-100 text-gray-800",
+  contacted: "bg-indigo-100 text-indigo-800",
+  follow_up_needed: "bg-yellow-100 text-yellow-800",
+  interested: "bg-green-100 text-green-800",
+  call_booked: "bg-teal-100 text-teal-800",
+  proposal_sent: "bg-purple-100 text-purple-800",
+  won: "bg-emerald-100 text-emerald-800",
+  lost: "bg-red-100 text-red-800",
+  do_not_contact: "bg-gray-800 text-white",
 };
 
 export default function LeadDetail() {
@@ -36,6 +48,12 @@ export default function LeadDetail() {
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [manualWebsite, setManualWebsite] = useState("");
+  const [emailDraft, setEmailDraft] = useState<EmailDraft | null>(null);
+  const [generatingEmail, setGeneratingEmail] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
 
   const id = Number(params.id);
 
@@ -44,14 +62,28 @@ export default function LeadDetail() {
       const data = await getLead(id);
       setLead(data);
       setNotes(data.notes || "");
+      if (data.email_draft_subject) {
+        setEmailSubject(data.email_draft_subject);
+        setEmailBody(data.email_draft_body || "");
+        setEmailDraft({ subject: data.email_draft_subject, body: data.email_draft_body, error: null, lead_id: id });
+      }
     } catch (e) {
       console.error("Failed to load lead", e);
+    }
+  }
+
+  async function loadActivity() {
+    try {
+      const logs = await getActivityLogs(id);
+      setActivityLog(logs);
+    } catch (e) {
+      console.error("Failed to load activity", e);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { loadLead(); }, [id]);
+  useEffect(() => { loadLead(); loadActivity(); }, [id]);
 
   async function handleStatusChange(status: string) {
     setSavingStatus(true);
@@ -60,6 +92,7 @@ export default function LeadDetail() {
       const updated = await updateLeadStatus(id, status);
       setLead(updated);
       setMessage({ type: "success", text: "Status updated" });
+      loadActivity();
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     } finally {
@@ -74,6 +107,7 @@ export default function LeadDetail() {
       const updated = await updateLeadNotes(id, notes);
       setLead(updated);
       setMessage({ type: "success", text: "Notes saved" });
+      loadActivity();
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     } finally {
@@ -88,6 +122,7 @@ export default function LeadDetail() {
       const updated = await enrichLead(id);
       setLead(updated);
       setMessage({ type: "success", text: updated.has_email ? `Email found: ${updated.email}` : "No email found" });
+      loadActivity();
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     } finally {
@@ -109,10 +144,59 @@ export default function LeadDetail() {
         setMessage({ type: "error", text: "No website found via Google Places." });
       }
       loadLead();
+      loadActivity();
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     } finally {
       setSearchingGoogle(false);
+    }
+  }
+
+  async function handleGenerateEmail() {
+    setGeneratingEmail(true);
+    setMessage(null);
+    try {
+      const draft = await generateLeadEmail(id);
+      if (draft.error) {
+        setMessage({ type: "error", text: draft.error });
+      } else {
+        setEmailDraft(draft);
+        setEmailSubject(draft.subject || "");
+        setEmailBody(draft.body || "");
+        setMessage({ type: "success", text: "Email draft generated!" });
+        loadActivity();
+      }
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message });
+    } finally {
+      setGeneratingEmail(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    setSavingDraft(true);
+    setMessage(null);
+    try {
+      await saveEmailDraft(id, emailSubject, emailBody);
+      setMessage({ type: "success", text: "Email draft saved!" });
+      loadLead();
+      loadActivity();
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message });
+    } finally {
+      setSavingDraft(false);
+    }
+  }
+
+  async function handleMarkReady() {
+    setMessage(null);
+    try {
+      await markEmailReady(id);
+      setMessage({ type: "success", text: "Marked as ready to send!" });
+      loadLead();
+      loadActivity();
+    } catch (e: any) {
+      setMessage({ type: "error", text: e.message });
     }
   }
 
@@ -125,6 +209,7 @@ export default function LeadDetail() {
       setManualWebsite("");
       setMessage({ type: "success", text: `Website accepted: ${result.website}` });
       loadLead();
+      loadActivity();
     } catch (e: any) {
       setMessage({ type: "error", text: e.message });
     }
@@ -165,6 +250,13 @@ export default function LeadDetail() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={handleGenerateEmail}
+            disabled={generatingEmail}
+            className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {generatingEmail ? "Generating..." : lead.email_draft_status !== "not_generated" ? "Regenerate Email" : "Generate Email"}
+          </button>
+          <button
             onClick={handleSearchGoogle}
             disabled={searchingGoogle}
             className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
@@ -181,7 +273,7 @@ export default function LeadDetail() {
             </button>
           )}
           <a
-            href="http://127.0.0.1:8000/leads/export/csv"
+            href="/api/leads/export/csv"
             className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             Export CSV
@@ -265,6 +357,58 @@ export default function LeadDetail() {
             </dl>
           </div>
 
+          {(emailDraft || lead.email_draft_subject) && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold">Email Draft</h2>
+                {lead.email_draft_status && (
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    lead.email_draft_status === "ready_to_send" ? "bg-green-100 text-green-700" :
+                    lead.email_draft_status === "draft_saved" ? "bg-blue-100 text-blue-700" :
+                    "bg-gray-100 text-gray-600"
+                  }`}>
+                    {lead.email_draft_status.replace(/_/g, " ")}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Subject</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    className="w-full mt-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Body</label>
+                  <textarea
+                    value={emailBody}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    rows={12}
+                    className="w-full mt-1 border border-gray-300 rounded-lg p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveDraft}
+                    disabled={savingDraft}
+                    className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingDraft ? "Saving..." : "Save Draft"}
+                  </button>
+                  <button
+                    onClick={handleMarkReady}
+                    className="px-4 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Mark Ready to Send
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
             <h2 className="text-lg font-semibold mb-4">Status</h2>
             <div className="flex flex-wrap gap-2">
@@ -301,6 +445,57 @@ export default function LeadDetail() {
             >
               {savingNotes ? "Saving..." : "Save Notes"}
             </button>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+            <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
+            {activityLog.length === 0 ? (
+              <p className="text-sm text-gray-400">No activity recorded yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {activityLog.map((log) => (
+                  <div key={log.id} className="flex gap-3 text-sm">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                        log.action.startsWith("email") ? "bg-blue-400" :
+                        log.action.startsWith("status") ? "bg-green-400" :
+                        log.action.startsWith("website") || log.action.startsWith("note") ? "bg-amber-400" :
+                        "bg-gray-400"
+                      }`} />
+                      <div className="w-px grow bg-gray-200 min-h-[24px]" />
+                    </div>
+                    <div className="pb-3 flex-1">
+                      <p className="text-gray-700">
+                        {log.action === "status_changed" ? (() => {
+                          try {
+                            const d = JSON.parse(log.details || "{}");
+                            return <>Status changed: <span className="font-medium">{d.from?.replace(/_/g, " ")}</span> → <span className="font-medium">{d.to?.replace(/_/g, " ")}</span></>;
+                          } catch { return "Status changed"; }
+                        })() : log.action === "email_generated" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Email draft generated: <span className="font-medium">{d.subject}</span></>; }
+                          catch { return "Email draft generated"; }
+                        })() : log.action === "email_draft_saved" ? "Email draft saved" :
+                        log.action === "email_marked_ready" ? "Email marked ready to send" :
+                        log.action === "website_updated" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Website updated: <span className="font-medium">{d.website}</span></>; }
+                          catch { return "Website updated"; }
+                        })() : log.action === "website_accepted" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Website accepted: <span className="font-medium">{d.website}</span></>; }
+                          catch { return "Website accepted"; }
+                        })() : log.action === "notes_updated" ? "Notes updated" :
+                        log.action === "email_enriched" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Email found: <span className="font-medium">{d.email}</span></>; }
+                          catch { return "Email enriched"; }
+                        })() : log.action?.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        {log.created_at ? new Date(log.created_at).toLocaleString() : ""}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
