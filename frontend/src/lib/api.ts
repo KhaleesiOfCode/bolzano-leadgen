@@ -327,8 +327,8 @@ export function approveCampaignLeads(id: number, leadIds: number[]): Promise<{ a
   });
 }
 
-export function sendCampaignEmail(campaignId: number, campaignLeadId: number): Promise<any> {
-  return fetcher(`/campaigns/${campaignId}/send/${campaignLeadId}`, { method: "POST" });
+export function generateCampaignEmail(campaignId: number, campaignLeadId: number): Promise<{ status: string; to: string | null; subject: string; body: string }> {
+  return fetcher(`/campaigns/${campaignId}/generate/${campaignLeadId}`, { method: "POST" });
 }
 
 // ─── Email Generation ─────────────────────────────────────

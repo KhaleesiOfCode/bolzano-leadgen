@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getCampaign, previewCampaignLeads, addLeadsToCampaign, getCampaignLeads, approveCampaignLeads, sendCampaignEmail, updateCampaignStatus, getTemplates } from "@/lib/api";
+import { getCampaign, previewCampaignLeads, addLeadsToCampaign, getCampaignLeads, approveCampaignLeads, generateCampaignEmail, updateCampaignStatus, getTemplates } from "@/lib/api";
 
 export default function CampaignDetailPage() {
   const params = useParams();
@@ -18,6 +18,7 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [emailPreview, setEmailPreview] = useState<{ leadName: string; to: string | null; subject: string; body: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -52,17 +53,19 @@ export default function CampaignDetailPage() {
     setMessage(`Approved ${ids.length} leads`);
   }
 
-  async function handleSend(campaignLeadId: number) {
+  async function handleGenerate(campaignLeadId: number, leadName: string) {
     setSendingId(campaignLeadId);
     try {
-      const result = await sendCampaignEmail(id, campaignLeadId);
-      setMessage(`Sent to ${result.to}: "${result.subject}"`);
+      const result = await generateCampaignEmail(id, campaignLeadId);
+      if (result.status === "error") {
+        setMessage(`Error: ${result.error || "No email address for this lead"}`);
+      } else {
+        setEmailPreview({ leadName, to: result.to, subject: result.subject, body: result.body });
+      }
     } catch (e: any) {
       setMessage(`Error: ${e.message}`);
     } finally {
       setSendingId(null);
-      setCampaignLeads(await getCampaignLeads(id));
-      setCampaign(await getCampaign(id));
     }
   }
 
@@ -76,7 +79,6 @@ export default function CampaignDetailPage() {
 
   const pendingLeads = campaignLeads.filter(cl => cl.status === "pending");
   const approvedLeads = campaignLeads.filter(cl => cl.status === "approved");
-  const sentLeads = campaignLeads.filter(cl => cl.status === "sent");
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -87,7 +89,7 @@ export default function CampaignDetailPage() {
           <h1 className="text-2xl font-bold">{campaign.name}</h1>
           <p className="text-sm text-gray-500 mt-1">
             Status: <span className="font-medium">{campaign.status}</span>
-            {" · "}{campaign.sent_count} sent / {campaign.open_count} opens / {campaign.reply_count} replies
+            {" · "}{approvedLeads.length} approved
           </p>
         </div>
         <div className="flex gap-2">
@@ -201,40 +203,47 @@ export default function CampaignDetailPage() {
         )}
       </div>
 
-      {/* Stage: Send */}
+      {/* Stage: Generate Email */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">3. Send & Track</h2>
+          <h2 className="text-lg font-semibold">3. Generate Email</h2>
         </div>
-        {approvedLeads.length === 0 && sentLeads.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">Approve leads above to send emails</p>
+        {approvedLeads.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">Approve leads above to generate emails</p>
         ) : (
           <div className="space-y-2">
-            {[...approvedLeads, ...sentLeads].map(cl => (
-              <div key={cl.id} className="bg-white border border-gray-200 rounded-lg p-3 text-sm flex items-center justify-between">
-                <div>
-                  <span className="font-medium">{cl.lead_name || "Unnamed"}</span>
-                  <span className="text-gray-500 ml-2 text-xs">{cl.lead_email}</span>
+            {approvedLeads.map(cl => (
+              <div key={cl.id} className="bg-white border border-gray-200 rounded-lg p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-medium">{cl.lead_name || "Unnamed"}</span>
+                    <span className="text-gray-500 ml-2 text-xs">{cl.lead_email}</span>
+                  </div>
+                  <button
+                    onClick={() => handleGenerate(cl.id, cl.lead_name || "Unnamed")}
+                    disabled={sendingId === cl.id}
+                    className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {sendingId === cl.id ? "..." : "Generate Email"}
+                  </button>
                 </div>
-                <div className="flex items-center gap-3">
-                  {cl.status === "sent" ? (
-                    <div className="flex gap-2 text-xs">
-                      {cl.sent_at && <span className="text-gray-400">Sent {new Date(cl.sent_at).toLocaleDateString()}</span>}
-                      {cl.opened_at ? <span className="text-green-600 font-medium">Opened</span> : <span className="text-gray-400">Not opened</span>}
-                      {cl.replied_at ? <span className="text-blue-600 font-medium">Replied</span> : null}
+
+                {emailPreview && sendingId === null && (() => {
+                  const leadName = cl.lead_name || "";
+                  const previewMatch = emailPreview.leadName === leadName || emailPreview.to === cl.lead_email;
+                  return previewMatch ? (
+                    <div className="mt-3 border-t border-gray-200 pt-3">
+                      <div className="bg-gray-50 rounded-lg p-3 text-xs font-mono">
+                        <p className="mb-1"><span className="font-semibold text-gray-600">To:</span> {emailPreview.to}</p>
+                        <p className="mb-2"><span className="font-semibold text-gray-600">Subject:</span> {emailPreview.subject}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{emailPreview.body}</p>
+                      </div>
+                      <p className="text-xs text-amber-600 mt-2">
+                        Copy this email and send from your own email client. The tool does not send emails automatically.
+                      </p>
                     </div>
-                  ) : cl.status === "approved" ? (
-                    <button
-                      onClick={() => handleSend(cl.id)}
-                      disabled={sendingId === cl.id}
-                      className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {sendingId === cl.id ? "..." : "Send"}
-                    </button>
-                  ) : (
-                    <span className="text-xs text-gray-400">{cl.status}</span>
-                  )}
-                </div>
+                  ) : null;
+                })()}
               </div>
             ))}
           </div>

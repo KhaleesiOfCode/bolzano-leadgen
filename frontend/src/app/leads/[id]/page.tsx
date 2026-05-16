@@ -460,7 +460,7 @@ export default function LeadDetail() {
                         log.action.startsWith("email") || log.action.startsWith("campaign_email") ? "bg-blue-400" :
                         log.action.startsWith("status") ? "bg-green-400" :
                         log.action.startsWith("website") || log.action.startsWith("note") ? "bg-amber-400" :
-                        log.action === "campaign_email_sent" ? "bg-indigo-400" :
+                        log.action === "campaign_email_generated" ? "bg-indigo-400" :
                         log.action === "campaign_email_opened" ? "bg-teal-400" :
                         log.action === "campaign_email_replied" ? "bg-emerald-400" :
                         "bg-gray-400"
@@ -492,9 +492,9 @@ export default function LeadDetail() {
                         log.action === "email_enriched" ? (() => {
                           try { const d = JSON.parse(log.details || "{}"); return <>Email found via <span className="font-medium">{d.source || "website"}</span>: {d.email}</>; }
                           catch { return "Email enriched"; }
-                        })() : log.action === "campaign_email_sent" ? (() => {
-                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email sent: <span className="font-medium">{d.subject}</span></>; }
-                          catch { return "Campaign email sent"; }
+                        })() : log.action === "campaign_email_generated" ? (() => {
+                          try { const d = JSON.parse(log.details || "{}"); return <>Campaign email generated: <span className="font-medium">{d.subject}</span></>; }
+                          catch { return "Campaign email generated"; }
                         })() : log.action === "campaign_email_error" ? (() => {
                           try { const d = JSON.parse(log.details || "{}"); return <>Campaign email failed: {d.error}</>; }
                           catch { return "Campaign email error"; }

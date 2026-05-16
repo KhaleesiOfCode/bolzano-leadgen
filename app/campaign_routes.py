@@ -241,10 +241,10 @@ def approve_campaign_leads(campaign_id: int, body: dict, db: Session = Depends(g
     return {"approved": updated}
 
 
-# ─── Send (one lead at a time — manual approval) ────────
+# ─── Generate email (manual send from user's email client) ─
 
-@router.post("/campaigns/{campaign_id}/send/{campaign_lead_id}")
-def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = Depends(get_db)):
+@router.post("/campaigns/{campaign_id}/generate/{campaign_lead_id}")
+def generate_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = Depends(get_db)):
     cl = db.query(CampaignLead).filter(
         CampaignLead.id == campaign_lead_id,
         CampaignLead.campaign_id == campaign_id,
@@ -255,12 +255,10 @@ def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = D
     lead = db.query(Lead).filter(Lead.id == cl.lead_id).first()
     camp = db.query(Campaign).filter(Campaign.id == campaign_id).first()
 
-    if not lead or not lead.email:
-        cl.status = "error"
-        cl.error = "No email address"
-        _log(db, lead.id, "campaign_email_error", {"campaign_id": campaign_id, "error": "No email address"})
-        db.commit()
-        return {"status": "error", "error": "No email address"}
+    if not lead:
+        return {"status": "error", "error": "Lead not found"}
+
+    to_email = lead.email
 
     template = None
     if camp.template_id:
@@ -306,23 +304,20 @@ def send_campaign_email(campaign_id: int, campaign_lead_id: int, db: Session = D
     body = body.replace("{{website}}", lead.website or "your website")
     body = body.replace("{{subgroup}}", (lead.business_subgroup or "").replace("_", " "))
 
-    logger.info("=== PREVIEW EMAIL (not sent) ===")
-    logger.info("To: %s", lead.email)
+    logger.info("=== GENERATED EMAIL (copy & send manually) ===")
+    logger.info("To: %s", to_email)
     logger.info("Subject: %s", subject)
     logger.info("Body:\n%s", body)
-    logger.info("================================")
+    logger.info("=============================================")
 
-    cl.status = "sent"
-    cl.sent_at = datetime.now(timezone.utc)
-    camp.sent_count = (camp.sent_count or 0) + 1
-    _log(db, lead.id, "campaign_email_sent", {"campaign_id": campaign_id, "campaign": camp.name, "subject": subject, "to": lead.email})
+    _log(db, lead.id, "campaign_email_generated", {"campaign_id": campaign_id, "campaign": camp.name, "subject": subject, "to": to_email})
     db.commit()
 
     return {
-        "status": "sent",
-        "to": lead.email,
+        "status": "generated",
+        "to": to_email,
         "subject": subject,
-        "body_preview": body[:200],
+        "body": body,
     }
 
 
